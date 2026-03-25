@@ -31,5 +31,4 @@
 
 ## Project Overview
 [Add this section]
-[performance assessment to support predictive analysis in the automotive resale market.
 

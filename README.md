@@ -21,7 +21,7 @@
 
 ## Submission Details
 **Platform:** Moodle <br>
-**Project Deadline:** April 24th, 17:00 PM <br>
+**Project Deadline:** April 24th, 17:00 <br>
 
 ## Technical Details
 - Programming Language: `Python` <br>

@@ -5,7 +5,7 @@
   **Deep Learning** <br>
   **2025–2026**
 
-  # Skin Lessions
+  # HAM10000 dataset: Skin Lessions Study
 </div>
 
 ---

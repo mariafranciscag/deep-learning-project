@@ -10,44 +10,18 @@ from concurrent.futures import ThreadPoolExecutor
 with open("label2idx.json", "r") as f:
     label2idx = json.load(f)
 
-## path for the new images
+# ── Path for the new images ─────────────────────────────────────────────────────────────────
 base_path = "./data" 
 aug_dir = os.path.join(base_path, "HAM10000_augmented")
 if not os.path.exists(aug_dir):
     os.makedirs(aug_dir)
 
-
-# RESIZING STRATEGIES
-
-def format_standard_square(img):
-    """1. Squishes the image to 224x224, ignoring aspect ratio."""
-    return img.resize((224, 224))
-
-def format_padded_square(img):
-    """2. Scales to fit inside 224x224, padding the rest with black."""
-    # ImageOps.pad scales the image to fit the box without distortion, adding borders.
-    return ImageOps.pad(img, (224, 224), color=(0, 0, 0))
-
-def format_center_crop(img):
-    """3. Scales short edge to 224, cuts the exact 224x224 center."""
-    # ImageOps.fit scales to fill the box and trims the excess from the edges.
-    return ImageOps.fit(img, (224, 224), centering=(0.5, 0.5))
-
-def format_short_rectangle(img):
-    """4. Hardcoded to 300x224 (maintains 4:3 ratio based on 600x450 original)."""
-    return img.resize((300, 224))
-
-def format_area_matched(img):
-    """5. Hardcoded to 256x192 (maintains 4:3 ratio, matches 224x224 pixel area)."""
-    return img.resize((256, 192))
-
-
-# RGB WEIGHTS (IMAGE NET)
+# ── RGB Weights (ImageNet) ─────────────────────────────────────────────────────────────────
 mean = [0.485, 0.456, 0.406]
 std  = [0.229, 0.224, 0.225]
 
 
-# AUGMENTATION STRATEGIES
+# ── Augmentation Strategies ─────────────────────────────────────────────────────────────────
 
 ## ── STRATEGY 1 — Light (geometric only) ──────────────────────────────────────
 ### Safe flips and rotation, nothing that touches color or structure
@@ -129,7 +103,7 @@ save_strat_base = transforms.Compose([]) #no transformations for base when savin
 
 
 
-# AUGMENTATION MAPS
+# ── Augmentation Maps ─────────────────────────────────────────────────────────────────
 
 strategy_map = {
     "nv":    strat_base,
@@ -162,9 +136,9 @@ augmentation_multiplier_map = {
 }
 
 
-# AUGMENTATION PIPELINE
+# ── Augmentation Pipeline ─────────────────────────────────────────────────────────────────
 
-def augment_single_image(original_path, transform, new_id, resize_strategy):
+def augment_single_image(original_path, transform, new_id):
     """
     Load, augment, and save a single image.
     
@@ -177,7 +151,6 @@ def augment_single_image(original_path, transform, new_id, resize_strategy):
         Path to saved augmented image
     """
     img = Image.open(original_path).convert('RGB')
-    img = resize_strategy(img)
     
     if transform:
         img = transform(img)
@@ -219,7 +192,7 @@ def build_metadata_row(new_id, save_path, label, lesion_id, original_row):
     return new_row_dict
 
 
-def offline_augmentation(df, label, multiplier, resize_strategy):
+def offline_augmentation(df, label, multiplier):
     """
     Generate augmented images for a specific class label.
     
@@ -258,7 +231,7 @@ def offline_augmentation(df, label, multiplier, resize_strategy):
         
         # Augment image
         new_id = f"AUG_{label}_{uuids[i*2]}"
-        save_path = augment_single_image(original_path, transform, new_id, resize_strategy)
+        save_path = augment_single_image(original_path, transform, new_id)
         
         # Build metadata
         lesion_id = f"AUG_LESION_{label}_{uuids[i*2+1]}"
@@ -268,7 +241,7 @@ def offline_augmentation(df, label, multiplier, resize_strategy):
     return new_rows
 
 
-def generate_augmented_dataset(df, aug_map, resize_strategy):
+def generate_augmented_dataset(df, aug_map):
     """
     Generate augmented images in parallel for all classes.
     
@@ -289,7 +262,7 @@ def generate_augmented_dataset(df, aug_map, resize_strategy):
             if multiplier > 1:
                 print(f"Submitting task for augmenting {label} (multiplier: {multiplier})")
                 futures.append(
-                    executor.submit(offline_augmentation, df, label, multiplier, resize_strategy)
+                    executor.submit(offline_augmentation, df, label, multiplier)
                 )
         
         # Collect results
@@ -337,7 +310,7 @@ def combine_datasets(original_df, augmented_df, undersampled_df):
     )
 
 
-def run_augmentation_pipeline(train_df, resize_strategy, undersample, undersample_size, output_path, augmentation_map=augmentation_multiplier_map, undersample_label='nv'):
+def run_augmentation_pipeline(train_df, undersample, undersample_size, output_path, augmentation_map=augmentation_multiplier_map, undersample_label='nv'):
     """
     Complete augmentation and balancing pipeline.
     
@@ -358,7 +331,7 @@ def run_augmentation_pipeline(train_df, resize_strategy, undersample, undersampl
     
     # Step 1: Generate augmented images
     print("\n[1/3] Generating augmented images...")
-    augmented_df = generate_augmented_dataset(train_df, augmentation_map, resize_strategy)
+    augmented_df = generate_augmented_dataset(train_df, augmentation_map)
     print(f"Generated {len(augmented_df)} augmented images")
     
     

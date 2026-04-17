@@ -7,39 +7,31 @@
 # Place this file in the same directory as your notebook.
 
 import os
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 import keras
-from sklearn.metrics import (
-    classification_report,
-    confusion_matrix,
-    roc_auc_score,
-    roc_curve,
-)
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.preprocessing import label_binarize
 import tensorflow as tf
+from sklearn.utils.class_weight import compute_class_weight
 
-BATCH_SIZE = 32
 
-def format_area_matched(img):
-    """5. Hardcoded to 256x192 (maintains 4:3 ratio, matches 224x224 pixel area)."""
-    return img.resize((256, 192))
 
-def load_image(path, label, resize_function):
+# ── Dataset ─────────────────────────────────────────────────────────────────
+def load_image(path, label):
     img = tf.io.read_file(path)
     img = tf.image.decode_jpeg(img, channels=3)
-    img = tf.py_function(func=resize_function, inp=[img], Tout=tf.float32)
     img = tf.cast(img, tf.float32) / 255.0
     return img, label
 
-def make_dataset(df, resize_function, shuffle=False, repeat=False):
+def make_dataset(df, shuffle=False, repeat=False, batch_size=32):
     paths = df["image_path"].values
     labels = df["dx_encoded"].values
 
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
-    ds = ds.map(lambda x, y: load_image(x, y, resize_function), num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.map(lambda x, y: load_image(x, y), num_parallel_calls=tf.data.AUTOTUNE)
         
     if shuffle:
         ds = ds.shuffle(buffer_size=len(df))
@@ -47,8 +39,15 @@ def make_dataset(df, resize_function, shuffle=False, repeat=False):
     if repeat:
         ds = ds.repeat()  
 
-    ds = ds.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
+    ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     return ds
+
+# ── Class Weights ─────────────────────────────────────────────────────────────────
+def make_class_weights(df):
+    classes = np.array(sorted(df["dx"].unique()))
+    class_weights = compute_class_weight(class_weight="balanced",classes=classes,y=df["dx"])
+    return {i: w for i, w in enumerate(class_weights)}
+
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 
@@ -241,7 +240,7 @@ def plot_comparison(results: dict):
                 "C — MobileNetV2":     {"macro_auc": 0.94, "mel_recall": 0.82},
             }
     """
-    import pandas as pd
+
 
     df = pd.DataFrame(results).T.reset_index()
     df.columns = ["Model", "Macro AUC", "Mel recall"]

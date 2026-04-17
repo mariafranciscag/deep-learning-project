@@ -21,6 +21,34 @@ from sklearn.metrics import (
 from sklearn.preprocessing import label_binarize
 import tensorflow as tf
 
+BATCH_SIZE = 32
+
+def format_area_matched(img):
+    """5. Hardcoded to 256x192 (maintains 4:3 ratio, matches 224x224 pixel area)."""
+    return img.resize((256, 192))
+
+def load_image(path, label, resize_function):
+    img = tf.io.read_file(path)
+    img = tf.image.decode_jpeg(img, channels=3)
+    img = tf.py_function(func=resize_function, inp=[img], Tout=tf.float32)
+    img = tf.cast(img, tf.float32) / 255.0
+    return img, label
+
+def make_dataset(df, resize_function, shuffle=False, repeat=False):
+    paths = df["image_path"].values
+    labels = df["dx_encoded"].values
+
+    ds = tf.data.Dataset.from_tensor_slices((paths, labels))
+    ds = ds.map(lambda x, y: load_image(x, y, resize_function), num_parallel_calls=tf.data.AUTOTUNE)
+        
+    if shuffle:
+        ds = ds.shuffle(buffer_size=len(df))
+    
+    if repeat:
+        ds = ds.repeat()  
+
+    ds = ds.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
+    return ds
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 

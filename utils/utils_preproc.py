@@ -199,35 +199,23 @@ def verify_remediation(df, threshold, num_samples=3):
 
 def format_standard_square(img):
     """1. Squishes the image to 224x224, ignoring aspect ratio."""
-    if isinstance(img, np.ndarray):
-        img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    return np.array(cv2.cvtColor(np.array(img.resize((224, 224))), cv2.COLOR_RGB2BGR))
+    return img.resize((224, 224))
 
 def format_padded_square(img):
     """2. Scales to fit inside 224x224, padding the rest with black."""
-    if isinstance(img, np.ndarray):
-        img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    padded = ImageOps.pad(img, (224, 224), color=(0, 0, 0))
-    return np.array(cv2.cvtColor(np.array(padded), cv2.COLOR_RGB2BGR))
+    return ImageOps.pad(img, (224, 224), color=(0, 0, 0))
 
 def format_center_crop(img):
     """3. Scales short edge to 224, cuts the exact 224x224 center."""
-    if isinstance(img, np.ndarray):
-        img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    cropped = ImageOps.fit(img, (224, 224), centering=(0.5, 0.5))
-    return np.array(cv2.cvtColor(np.array(cropped), cv2.COLOR_RGB2BGR))
+    return ImageOps.fit(img, (224, 224), centering=(0.5, 0.5))
 
 def format_short_rectangle(img):
-    """4. Hardcoded to 300x224."""
-    if isinstance(img, np.ndarray):
-        img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    return np.array(cv2.cvtColor(np.array(img.resize((300, 224))), cv2.COLOR_RGB2BGR))
+    """4. Hardcoded to 300x224 (maintains 4:3 ratio based on 600x450 original)."""
+    return img.resize((300, 224))
 
 def format_area_matched(img):
-    """5. Hardcoded to 256x192."""
-    if isinstance(img, np.ndarray):
-        img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    return np.array(cv2.cvtColor(np.array(img.resize((256, 192))), cv2.COLOR_RGB2BGR))
+    """5. Hardcoded to 256x192 (maintains 4:3 ratio, matches 224x224 pixel area)."""
+    return img.resize((256, 192))
 
 
 # ── Final Pipeline ─────────────────────────────────────────────────────────────────

@@ -25,24 +25,23 @@ from sklearn.utils.class_weight import compute_class_weight
 def load_image_with_resize(path, label, output_shape=(224, 224), preprocess_fn=None):
     img = tf.io.read_file(path)
     img = tf.image.decode_jpeg(img, channels=3)
-    img = tf.cast(img, tf.float32)
+    img = tf.cast(img, tf.float32) / 255.0
     img = tf.image.resize(img, output_shape)
     if preprocess_fn is not None:
         img = preprocess_fn(img)
     return img, label
 
-def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, 
-                 batch_size=32, preprocess_fn=None):
+def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch_size=32):
     paths  = df["image_path"].values
     labels = df["dx_encoded"].values
 
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
     ds = ds.map(
-        lambda x, y: load_image_with_resize(x, y, output_shape, preprocess_fn),
+        lambda x, y: load_image_with_resize(x, y, output_shape),
         num_parallel_calls=tf.data.AUTOTUNE
     )
     if shuffle:
-        ds = ds.shuffle(buffer_size=1000)
+        ds = ds.shuffle(buffer_size=len(df))
     if repeat:
         ds = ds.repeat()
     ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
@@ -106,19 +105,31 @@ def get_callbacks(checkpoint_path, patience_es=8, patience_lr=4):
 # ── Plotting ──────────────────────────────────────────────────────────────────
 
 def plot_history(history, title):
-    keys = [k for k in history.history if not k.startswith('val_')]
-    n = len(keys)
-    fig, axes = plt.subplots(1, n, figsize=(6*n, 5))
-    if n == 1:
-        axes = [axes]
+    """
+    Plots loss and accuracy curves for a single Keras training History object.
+
+    Parameters
+    ----------
+    history : keras.callbacks.History
+        Object returned by model.fit().
+    title : str
+        Figure title, e.g. "Model B — EfficientNetB0 Phase 2".
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle(title)
-    for ax, key in zip(axes, keys):
-        ax.plot(history.history[key], label='train')
-        if f'val_{key}' in history.history:
-            ax.plot(history.history[f'val_{key}'], label='val')
-        ax.set_title(key)
-        ax.set_xlabel('Epoch')
-        ax.legend()
+
+    axes[0].plot(history.history["loss"],         label="train")
+    axes[0].plot(history.history["val_loss"],     label="val")
+    axes[0].set_title("Loss")
+    axes[0].set_xlabel("Epoch")
+    axes[0].legend()
+
+    axes[1].plot(history.history["accuracy"],     label="train")
+    axes[1].plot(history.history["val_accuracy"], label="val")
+    axes[1].set_title("Accuracy")
+    axes[1].set_xlabel("Epoch")
+    axes[1].legend()
+
     plt.tight_layout()
     plt.show()
 

@@ -17,44 +17,36 @@ from sklearn.metrics import classification_report, confusion_matrix, roc_auc_sco
 from sklearn.preprocessing import label_binarize
 import tensorflow as tf
 from sklearn.utils.class_weight import compute_class_weight
+from keras.applications.efficientnet import preprocess_input
+from keras.applications.mobilenet_v2 import preprocess_input
+from keras.applications.densenet import preprocess_input
+from keras.applications.resnet import preprocess_input
 
 
 
 # ── Dataset ─────────────────────────────────────────────────────────────────
-def load_image_with_resize(path, label, resize_function=None, output_shape=(224, 224)):
-    img_raw = tf.io.read_file(path)
-    img = tf.image.decode_jpeg(img_raw, channels=3)
+
+def load_image_with_resize(path, label, output_shape=(224, 224)):
+    img = tf.io.read_file(path)
+    img = tf.image.decode_jpeg(img, channels=3)
     img = tf.cast(img, tf.float32)
-
-    if resize_function is not None:
-        def py_resize(img_np):
-            img_uint8 = img_np.astype(np.uint8)
-            pil_img = Image.fromarray(img_uint8)       # numpy → PIL
-            resized = resize_function(pil_img)          # PIL in, PIL out
-            return np.array(resized).astype(np.float32)
-
-        img = tf.numpy_function(py_resize, [img], tf.float32)
-        img.set_shape([output_shape[0], output_shape[1], 3])  
-    else:
-        img = tf.image.resize(img, [224, 224])
-
+    img = tf.image.resize(img, output_shape)   # still [0, 255] float
+    img = preprocess_input(img)                # ResNet50-specific normalisation
     return img, label
 
-def make_dataset(df, resize_function=None, output_shape=(224, 224), shuffle=False, repeat=False, batch_size=32):
-    paths = df["image_path"].values
+def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch_size=32):
+    paths  = df["image_path"].values
     labels = df["dx_encoded"].values
 
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
     ds = ds.map(
-        lambda x, y: load_image_with_resize(x, y, resize_function, output_shape),
+        lambda x, y: load_image_with_resize(x, y, output_shape),
         num_parallel_calls=tf.data.AUTOTUNE
     )
-
     if shuffle:
         ds = ds.shuffle(buffer_size=len(df))
     if repeat:
         ds = ds.repeat()
-
     ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     return ds
 

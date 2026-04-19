@@ -26,12 +26,13 @@ from keras.applications.resnet import preprocess_input
 
 # ── Dataset ─────────────────────────────────────────────────────────────────
 
-def load_image_with_resize(path, label, output_shape=(224, 224)):
+def load_image_with_resize(path, label, output_shape=(224, 224), preprocess_fn=None):
     img = tf.io.read_file(path)
     img = tf.image.decode_jpeg(img, channels=3)
     img = tf.cast(img, tf.float32)
-    img = tf.image.resize(img, output_shape)   # still [0, 255] float
-    img = preprocess_input(img)                # ResNet50-specific normalisation
+    img = tf.image.resize(img, output_shape)
+    if preprocess_fn is not None:
+        img = preprocess_fn(img)
     return img, label
 
 def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch_size=32):

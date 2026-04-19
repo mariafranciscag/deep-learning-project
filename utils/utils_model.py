@@ -17,10 +17,6 @@ from sklearn.metrics import classification_report, confusion_matrix, roc_auc_sco
 from sklearn.preprocessing import label_binarize
 import tensorflow as tf
 from sklearn.utils.class_weight import compute_class_weight
-from keras.applications.efficientnet import preprocess_input
-from keras.applications.mobilenet_v2 import preprocess_input
-from keras.applications.densenet import preprocess_input
-from keras.applications.resnet import preprocess_input
 
 
 
@@ -35,17 +31,18 @@ def load_image_with_resize(path, label, output_shape=(224, 224), preprocess_fn=N
         img = preprocess_fn(img)
     return img, label
 
-def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch_size=32):
+def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, 
+                 batch_size=32, preprocess_fn=None):
     paths  = df["image_path"].values
     labels = df["dx_encoded"].values
 
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
     ds = ds.map(
-        lambda x, y: load_image_with_resize(x, y, output_shape),
+        lambda x, y: load_image_with_resize(x, y, output_shape, preprocess_fn),
         num_parallel_calls=tf.data.AUTOTUNE
     )
     if shuffle:
-        ds = ds.shuffle(buffer_size=len(df))
+        ds = ds.shuffle(buffer_size=1000)
     if repeat:
         ds = ds.repeat()
     ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
@@ -109,31 +106,19 @@ def get_callbacks(checkpoint_path, patience_es=8, patience_lr=4):
 # ── Plotting ──────────────────────────────────────────────────────────────────
 
 def plot_history(history, title):
-    """
-    Plots loss and accuracy curves for a single Keras training History object.
-
-    Parameters
-    ----------
-    history : keras.callbacks.History
-        Object returned by model.fit().
-    title : str
-        Figure title, e.g. "Model B — EfficientNetB0 Phase 2".
-    """
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    keys = [k for k in history.history if not k.startswith('val_')]
+    n = len(keys)
+    fig, axes = plt.subplots(1, n, figsize=(6*n, 5))
+    if n == 1:
+        axes = [axes]
     fig.suptitle(title)
-
-    axes[0].plot(history.history["loss"],         label="train")
-    axes[0].plot(history.history["val_loss"],     label="val")
-    axes[0].set_title("Loss")
-    axes[0].set_xlabel("Epoch")
-    axes[0].legend()
-
-    axes[1].plot(history.history["accuracy"],     label="train")
-    axes[1].plot(history.history["val_accuracy"], label="val")
-    axes[1].set_title("Accuracy")
-    axes[1].set_xlabel("Epoch")
-    axes[1].legend()
-
+    for ax, key in zip(axes, keys):
+        ax.plot(history.history[key], label='train')
+        if f'val_{key}' in history.history:
+            ax.plot(history.history[f'val_{key}'], label='val')
+        ax.set_title(key)
+        ax.set_xlabel('Epoch')
+        ax.legend()
     plt.tight_layout()
     plt.show()
 

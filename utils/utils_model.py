@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from PIL import Image
 import keras
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.preprocessing import label_binarize
@@ -20,43 +21,39 @@ from sklearn.utils.class_weight import compute_class_weight
 
 
 # ── Dataset ─────────────────────────────────────────────────────────────────
-def load_image_with_resize(path, label, resize_function=None):
-
+def load_image_with_resize(path, label, resize_function=None, output_shape=(224, 224)):
     img_raw = tf.io.read_file(path)
     img = tf.image.decode_jpeg(img_raw, channels=3)
-
     img = tf.cast(img, tf.float32)
 
     if resize_function is not None:
         def py_resize(img_np):
-            img_uint8 = (img_np * 255).astype(np.uint8)
-            resized = resize_function(img_uint8)
-            return resized.astype(np.float32) / 255.0
+            img_uint8 = img_np.astype(np.uint8)
+            pil_img = Image.fromarray(img_uint8)       # numpy → PIL
+            resized = resize_function(pil_img)          # PIL in, PIL out
+            return np.array(resized).astype(np.float32)
 
         img = tf.numpy_function(py_resize, [img], tf.float32)
-        img.set_shape([192, 256, 3]) 
+        img.set_shape([output_shape[0], output_shape[1], 3])  
     else:
         img = tf.image.resize(img, [224, 224])
 
     return img, label
 
-def make_dataset(df, resize_function=None, shuffle=False, repeat=False, batch_size=32):
+def make_dataset(df, resize_function=None, output_shape=(224, 224), shuffle=False, repeat=False, batch_size=32):
     paths = df["image_path"].values
     labels = df["dx_encoded"].values
 
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
-    
-    # Pass the resize_function to our loader
     ds = ds.map(
-        lambda x, y: load_image_with_resize(x, y, resize_function), 
+        lambda x, y: load_image_with_resize(x, y, resize_function, output_shape),
         num_parallel_calls=tf.data.AUTOTUNE
     )
-        
+
     if shuffle:
         ds = ds.shuffle(buffer_size=len(df))
-    
     if repeat:
-        ds = ds.repeat()  
+        ds = ds.repeat()
 
     ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     return ds

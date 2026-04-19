@@ -25,7 +25,7 @@ def load_image_with_resize(path, label, resize_function=None):
     img_raw = tf.io.read_file(path)
     img = tf.image.decode_jpeg(img_raw, channels=3)
 
-    img = tf.cast(img, tf.float32) / 255.0
+    img = tf.cast(img, tf.float32)
 
     if resize_function is not None:
         def py_resize(img_np):

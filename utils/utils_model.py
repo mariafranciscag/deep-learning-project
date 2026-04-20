@@ -40,13 +40,13 @@ def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
     ds = ds.map(
         lambda x, y: load_image_with_resize(x, y, output_shape),
-        num_parallel_calls=tf.data.AUTOTUNE
+        num_parallel_calls=2
     )
     if shuffle:
         ds = ds.shuffle(buffer_size=min(1000, len(df)))
     if repeat:
         ds = ds.repeat()
-    ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    ds = ds.batch(batch_size).prefetch(1)
     return ds
 
 
@@ -67,13 +67,13 @@ def make_dataset_new(df, shuffle=False, repeat=False, batch_size=32):
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
     ds = ds.map(
         lambda x, y: load_image_new(x, y),
-        num_parallel_calls=tf.data.AUTOTUNE
+        num_parallel_calls=2
     )
     if shuffle:
         ds = ds.shuffle(buffer_size=min(1000, len(df)))
     if repeat:
         ds = ds.repeat()
-    ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    ds = ds.batch(batch_size).prefetch(1)
     return ds
 
 # ── Class Weights ─────────────────────────────────────────────────────────────────

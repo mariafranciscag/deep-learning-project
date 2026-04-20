@@ -3,6 +3,7 @@ import numpy as np
 import json
 import time
 import tensorflow as tf
+import torch
 from torchvision import transforms
 from PIL import Image, ImageOps
 import os
@@ -12,6 +13,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 with open("label2idx.json", "r") as f:
     label2idx = json.load(f)
+
+torch.manual_seed(1)
 
 # ── Path for the new images ─────────────────────────────────────────────────────────────────
 base_path = "./data" 
@@ -104,39 +107,44 @@ save_strategy_3 = transforms.Compose([
 
 save_strat_base = transforms.Compose([]) #no transformations for base when saving
 
-
-
 # ── Augmentation Maps ─────────────────────────────────────────────────────────────────
 
-strategy_map = {
-    "nv":    strat_base,
-    "mel":   strategy_1,
-    "bkl":   strategy_1,
-    "bcc":   strategy_2,
-    "akiec": strategy_2,
-    "vasc":  strategy_3,
-    "df":    strategy_3,
-}
+def get_square_root_maps(df, target_size=4500):
+    counts = df['dx'].value_counts()
+    
+    mult_map = {}
+    strat_map = {}
+    save_strat_map = {}
+    
+    for label, count in counts.items():
+        if label == 'nv':
+            mult_map[label] = 1
+            strat_map[label] = strat_base
+            continue
+            
+        # The Square Root Math
+        raw_mult = np.sqrt(target_size / count)
+        final_mult = int(np.round(raw_mult))
+        
+        # Ensure we always have at least 1
+        mult_map[label] = max(1, final_mult)
+        
+        # Objective Strategy Assignment
+        if mult_map[label] <= 1:
+            strat_map[label] = strat_base
+            save_strat_map[label] = save_strat_base
+        elif mult_map[label] <= 3:
+            strat_map[label] = strategy_1 # Mild stretch
+            save_strat_map[label] = save_strategy_1
+        elif mult_map[label] <= 6:
+            strat_map[label] = strategy_2 # Moderate stretch
+            save_strat_map[label] = save_strategy_2
+        else:
+            strat_map[label] = strategy_3 # Heavy stretch
+            save_strat_map[label] = save_strategy_3
+            
+    return mult_map, strat_map, save_strat_map
 
-save_strategy_map = {
-    "nv":    save_strat_base,
-    "mel":   save_strategy_1,
-    "bkl":   save_strategy_1,
-    "bcc":   save_strategy_2,
-    "akiec": save_strategy_2,
-    "vasc":  save_strategy_3,
-    "df":    save_strategy_3,
-}
-
-augmentation_multiplier_map = {
-    "nv":    1,
-    "mel":   3,
-    "bkl":   3,
-    "bcc":   4,
-    "akiec": 5,
-    "vasc":  8,
-    "df":    8,
-}
 
 
 # ── Augmentation Pipeline ─────────────────────────────────────────────────────────────────
@@ -160,7 +168,7 @@ def augment_single_image(original_path, transform, new_id):
     
     new_filename = f"{new_id}.jpg"
     save_path = os.path.join(aug_dir, new_filename)
-    img.save(save_path, "JPEG",)
+    img.save(save_path, "JPEG", quality=95, subsampling=0)
     
     return save_path
 
@@ -195,7 +203,7 @@ def build_metadata_row(new_id, save_path, label, lesion_id, original_row):
     return new_row_dict
 
 
-def offline_augmentation(df, label, multiplier):
+def offline_augmentation(df, label, multiplier, save_strategy_map):
     """
     Generate augmented images for a specific class label.
     
@@ -244,7 +252,7 @@ def offline_augmentation(df, label, multiplier):
     return new_rows
 
 
-def generate_augmented_dataset(df, aug_map):
+def generate_augmented_dataset(df, aug_map, save_strategy_map):
     """
     Generate augmented images in parallel for all classes.
     
@@ -265,7 +273,7 @@ def generate_augmented_dataset(df, aug_map):
             if multiplier > 1:
                 print(f"Submitting task for augmenting {label} (multiplier: {multiplier})")
                 futures.append(
-                    executor.submit(offline_augmentation, df, label, multiplier)
+                    executor.submit(offline_augmentation, df, label, multiplier, save_strategy_map)
                 )
         
         # Collect results
@@ -312,41 +320,8 @@ def combine_datasets(original_df, augmented_df, undersampled_df):
         ignore_index=True
     )
 
-class BatchTimeCallback(tf.keras.callbacks.Callback):
-    """
-    Custom Keras callback that records the duration of every
-    training batch and epoch.
 
-    After training, the recorded times can be used to compare computational
-    cost across different augmentation strategies (offline vs. online).
-
-    Attributes:
-        batch_times (list[float]): Duration of each training batch in seconds.
-        epoch_times (list[float]): Duration of each epoch in seconds.
-    """
-
-    def on_train_begin(self, logs=None):
-        """Initialize empty lists to store batch and epoch durations."""
-        self.batch_times = []
-        self.epoch_times = []
-
-    def on_epoch_begin(self, epoch, logs=None):
-        """Record the start timestamp of the current epoch."""
-        self._epoch_start = time.time()
-
-    def on_train_batch_begin(self, batch, logs=None):
-        """Record the start timestamp of the current batch."""
-        self._batch_start = time.time()
-
-    def on_train_batch_end(self, batch, logs=None):
-        """Compute and store the elapsed time for the completed batch."""
-        self.batch_times.append(time.time() - self._batch_start)
-
-    def on_epoch_end(self, epoch, logs=None):
-        """Compute and store the elapsed time for the completed epoch."""
-        self.epoch_times.append(time.time() - self._epoch_start)
-
-def run_augmentation_pipeline(train_df, undersample, undersample_size, output_path, augmentation_map=augmentation_multiplier_map, undersample_label='nv'):
+def run_augmentation_pipeline(train_df, undersample, undersample_size, output_path, augmentation_map, save_strategy_map, undersample_label='nv'):
     """
     Complete augmentation and balancing pipeline.
     
@@ -367,7 +342,7 @@ def run_augmentation_pipeline(train_df, undersample, undersample_size, output_pa
     
     # Step 1: Generate augmented images
     print("\n[1/3] Generating augmented images...")
-    augmented_df = generate_augmented_dataset(train_df, augmentation_map)
+    augmented_df = generate_augmented_dataset(train_df, augmentation_map, save_strategy_map)
     print(f"Generated {len(augmented_df)} augmented images")
     
     

@@ -7,6 +7,7 @@
 # Place this file in the same directory as your notebook.
 
 import os
+import time
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -128,6 +129,40 @@ def get_callbacks(checkpoint_path, patience_es=8, patience_lr=4):
             verbose=1,
         ),
     ]
+
+class BatchTimeCallback(tf.keras.callbacks.Callback):
+    """
+    Custom Keras callback that records the duration of every
+    training batch and epoch.
+
+    After training, the recorded times can be used to compare computational
+    cost across different augmentation strategies (offline vs. online).
+
+    Attributes:
+        batch_times (list[float]): Duration of each training batch in seconds.
+        epoch_times (list[float]): Duration of each epoch in seconds.
+    """
+
+    def on_train_begin(self, logs=None):
+        """Initialize empty lists to store batch and epoch durations."""
+        self.batch_times = []
+        self.epoch_times = []
+
+    def on_epoch_begin(self, epoch, logs=None):
+        """Record the start timestamp of the current epoch."""
+        self._epoch_start = time.time()
+
+    def on_train_batch_begin(self, batch, logs=None):
+        """Record the start timestamp of the current batch."""
+        self._batch_start = time.time()
+
+    def on_train_batch_end(self, batch, logs=None):
+        """Compute and store the elapsed time for the completed batch."""
+        self.batch_times.append(time.time() - self._batch_start)
+
+    def on_epoch_end(self, epoch, logs=None):
+        """Compute and store the elapsed time for the completed epoch."""
+        self.epoch_times.append(time.time() - self._epoch_start)
 
 
 # ── Plotting ──────────────────────────────────────────────────────────────────

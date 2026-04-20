@@ -16,21 +16,20 @@ with open("label2idx.json", "r") as f:
 
 torch.manual_seed(1)
 
-# ── Path for the new images ─────────────────────────────────────────────────────────────────
+# new images
 base_path = "./data" 
 aug_dir = os.path.join(base_path, "HAM10000_augmented")
 if not os.path.exists(aug_dir):
     os.makedirs(aug_dir)
 
-# ── RGB Weights (ImageNet) ─────────────────────────────────────────────────────────────────
 means = [0.485, 0.456, 0.406]
 stds  = [0.229, 0.224, 0.225]
 
 
-# ── Augmentation Strategies ─────────────────────────────────────────────────────────────────
+# Augmentation Strategies 
 
-## ── STRATEGY 1 — Light (geometric only) ──────────────────────────────────────
-### Safe flips and rotation, nothing that touches color or structure
+## STRATEGY 1 — Light (geometric)
+### safe flips and rotation, nothing that touches color or structure
 strategy_1 = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.RandomVerticalFlip(),
@@ -40,8 +39,8 @@ strategy_1 = transforms.Compose([
 ])
 
 
-## ── STRATEGY 2 — Moderate (geometry + mild color) ─────────────────────────────
-### Adds subtle brightness/contrast to simulate lighting variation
+## STRATEGY 2 — Moderate (geometry + mild color)
+### adds subtle brightness/contrast to simulate lighting variation
 strategy_2 = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.RandomVerticalFlip(),
@@ -53,8 +52,8 @@ strategy_2 = transforms.Compose([
 ])
 
 
-## ── STRATEGY 3 — Aggressive (everything + elastic + perspective) ────────────
-### Most aggressive — use only for extreme minority classes (vasc, df)
+## STRATEGY 3 — Aggressive (everything + elastic + perspective)
+### most aggressive — use only for extreme minority classes (vasc, df)
 strategy_3 = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.RandomVerticalFlip(),
@@ -69,7 +68,7 @@ strategy_3 = transforms.Compose([
     transforms.RandomErasing(p=0.35, scale=(0.02, 0.08)),
 ])
 
-### Base strategy, for the majority class
+### base strategy, for the majority class
 strat_base = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(means, stds),
@@ -78,14 +77,12 @@ strat_base = transforms.Compose([
 
 ## SAVE STRATEGIES
 
-### Save version without ToTensor and Normalize
 save_strategy_1 = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.RandomVerticalFlip(),
     transforms.RandomRotation(90),
 ])
 
-### Save version without ToTensor and Normalize
 save_strategy_2 = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.RandomVerticalFlip(),
@@ -93,7 +90,6 @@ save_strategy_2 = transforms.Compose([
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
 ])
 
-### Save version without ToTensor and Normalize
 save_strategy_3 = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.RandomVerticalFlip(),
@@ -107,7 +103,8 @@ save_strategy_3 = transforms.Compose([
 
 save_strat_base = transforms.Compose([]) #no transformations for base when saving
 
-# ── Augmentation Maps ─────────────────────────────────────────────────────────────────
+
+# Augmentation Maps
 
 def get_square_root_maps(df, target_size=4500):
     counts = df['dx'].value_counts()
@@ -122,32 +119,32 @@ def get_square_root_maps(df, target_size=4500):
             strat_map[label] = strat_base
             continue
             
-        # The Square Root Math
+        #Square Root Math
         raw_mult = np.sqrt(target_size / count)
         final_mult = int(np.round(raw_mult))
         
-        # Ensure we always have at least 1
+        #we always have at least 1
         mult_map[label] = max(1, final_mult)
         
-        # Objective Strategy Assignment
+        #strategy assignment
         if mult_map[label] <= 1:
             strat_map[label] = strat_base
             save_strat_map[label] = save_strat_base
         elif mult_map[label] <= 3:
-            strat_map[label] = strategy_1 # Mild stretch
+            strat_map[label] = strategy_1 #mild stretch
             save_strat_map[label] = save_strategy_1
         elif mult_map[label] <= 6:
-            strat_map[label] = strategy_2 # Moderate stretch
+            strat_map[label] = strategy_2 #moderate stretch
             save_strat_map[label] = save_strategy_2
         else:
-            strat_map[label] = strategy_3 # Heavy stretch
+            strat_map[label] = strategy_3 #heavy stretch
             save_strat_map[label] = save_strategy_3
             
     return mult_map, strat_map, save_strat_map
 
 
 
-# ── Augmentation Pipeline ─────────────────────────────────────────────────────────────────
+# Augmentation Pipeline
 
 def augment_single_image(original_path, transform, new_id):
     """
@@ -195,7 +192,6 @@ def build_metadata_row(new_id, save_path, label, lesion_id, original_row):
         'lesion_id': lesion_id
     }
     
-    # Copy other metadata from original row
     for col in ['dx_type', 'age', 'sex', 'localization']:
         if col in original_row:
             new_row_dict[col] = original_row[col]
@@ -223,16 +219,16 @@ def offline_augmentation(df, label, multiplier, save_strategy_map):
     """
     new_rows = []
     
-    # Filter to class data
+    #class data
     class_df = df[df['dx'] == label]
     paths = class_df['image_path'].tolist()
     metadata_rows = class_df.to_dict('records')
     
-    # Calculate augmentations needed
+    #calculate augmentations needed
     n_to_generate = int(len(paths) * (multiplier - 1))
     transform = save_strategy_map.get(label)
     
-    # Pre-generate all UUIDs (2 per augmented image: image_id + lesion_id)
+    #pre-generate all UUIDs (2 per augmented image: image_id + lesion_id)
     uuids = [uuid.uuid4().hex[:8] for _ in range(n_to_generate * 2)]
     
     for i in range(n_to_generate):
@@ -240,11 +236,11 @@ def offline_augmentation(df, label, multiplier, save_strategy_map):
         original_path = paths[idx]
         original_row = metadata_rows[idx]
         
-        # Augment image
+        #augment image
         new_id = f"AUG_{label}_{uuids[i*2]}"
         save_path = augment_single_image(original_path, transform, new_id)
         
-        # Build metadata
+        #build metadata
         lesion_id = f"AUG_LESION_{label}_{uuids[i*2+1]}"
         new_row = build_metadata_row(new_id, save_path, label, lesion_id, original_row)
         new_rows.append(new_row)
@@ -268,15 +264,14 @@ def generate_augmented_dataset(df, aug_map, save_strategy_map):
     with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
         futures = []
         
-        # Submit augmentation tasks
+        #augmentation tasks
         for label, multiplier in aug_map.items():
             if multiplier > 1:
                 print(f"Submitting task for augmenting {label} (multiplier: {multiplier})")
                 futures.append(
                     executor.submit(offline_augmentation, df, label, multiplier, save_strategy_map)
                 )
-        
-        # Collect results
+       
         for future in tqdm(futures, desc="Generating all augmented images"):
             all_new_metadata.extend(future.result())
     
@@ -340,13 +335,13 @@ def run_augmentation_pipeline(train_df, undersample, undersample_size, output_pa
     print("AUGMENTATION PIPELINE")
     print("=" * 70)
     
-    # Step 1: Generate augmented images
+    #augmented images
     print("\n[1/3] Generating augmented images...")
     augmented_df = generate_augmented_dataset(train_df, augmentation_map, save_strategy_map)
     print(f"Generated {len(augmented_df)} augmented images")
     
     
-    # Step 2: Undersample specified class
+    #undersample specified class
     if undersample:
         print(f"\n[2/3] Undersampling '{undersample_label}' to {undersample_size} samples...")
         undersampled_df = random_undersample_class(train_df, undersample_label, undersample_size)
@@ -362,7 +357,7 @@ def run_augmentation_pipeline(train_df, undersample, undersample_size, output_pa
         print(f"Final dataset size: {len(aug_train_df)} samples")
 
         
-    # Save and report
+    #save and report
     if output_path:
         aug_train_df.to_csv(output_path, index=False)
         print(f"\nSaved to: {output_path}")
@@ -392,10 +387,10 @@ def preprocess_imagenet(img):
     """
     return (img / 255.0 - means) / stds
 
-# ── Visualization ─────────────────────────────────────────────────────────────────
-# Function to denormalize the images, only for visualization purposes
+#Visualization
+#function to denormalize the images, only for visualization purposes
 def denormalize(tensor, mean, std):
-    # Reverse: x = (z * std) + mean
+    #reverse: x = (z * std) + mean
     img = tensor.cpu().numpy().transpose((1, 2, 0))
     img = img * np.array(std) + np.array(mean)
     return np.clip(img, 0, 1)

@@ -17,11 +17,12 @@ from sklearn.metrics import classification_report, confusion_matrix, roc_auc_sco
 from sklearn.preprocessing import label_binarize
 import tensorflow as tf
 from sklearn.utils.class_weight import compute_class_weight
+from utils.utils_preproc import *
 
 
 
 # ── Dataset ─────────────────────────────────────────────────────────────────
-
+# VERSOES ANTIGAS
 def load_image_with_resize(path, label, output_shape=(224, 224), preprocess_fn=None):
     img = tf.io.read_file(path)
     img = tf.image.decode_jpeg(img, channels=3)
@@ -38,6 +39,33 @@ def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
     ds = ds.map(
         lambda x, y: load_image_with_resize(x, y, output_shape),
+        num_parallel_calls=tf.data.AUTOTUNE
+    )
+    if shuffle:
+        ds = ds.shuffle(buffer_size=len(df))
+    if repeat:
+        ds = ds.repeat()
+    ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    return ds
+
+
+# VERSOES NOVAS
+def load_image_new(path, label, resize_function=format_center_crop_tf, preprocess_fn=None):
+    img = tf.io.read_file(path)
+    img = tf.image.decode_jpeg(img, channels=3)
+    img = tf.cast(img, tf.float32)
+    img = resize_function(img)
+    if preprocess_fn is not None:
+        img = preprocess_fn(img)
+    return img, label
+
+def make_dataset_new(df, shuffle=False, repeat=False, batch_size=32):
+    paths  = df["image_path"].values
+    labels = df["dx_encoded"].values
+
+    ds = tf.data.Dataset.from_tensor_slices((paths, labels))
+    ds = ds.map(
+        lambda x, y: load_image_new(x, y),
         num_parallel_calls=tf.data.AUTOTUNE
     )
     if shuffle:

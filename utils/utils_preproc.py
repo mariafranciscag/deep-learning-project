@@ -1,6 +1,7 @@
 import cv2
 import os
 import numpy as np
+import tensorflow as tf
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from PIL import ImageOps, Image
@@ -206,50 +207,14 @@ def format_padded_square(img):
     return ImageOps.pad(img, (224, 224), color=(0, 0, 0))
 
 def format_center_crop(img):
-    """3. Scales short edge to 224, cuts the exact 224x224 center."""
     return ImageOps.fit(img, (224, 224), centering=(0.5, 0.5))
 
-def format_short_rectangle(img):
-    """4. Hardcoded to 300x224 (maintains 4:3 ratio based on 600x450 original)."""
-    return img.resize((300, 224))
-
-def format_area_matched(img):
-    """5. Hardcoded to 256x192 (maintains 4:3 ratio, matches 224x224 pixel area)."""
-    return img.resize((256, 192))
-
-
-# ── Final Pipeline ─────────────────────────────────────────────────────────────────
-def preprocessing_pipeline(img, clahe=False, remove_background=False, resizing_strategy=format_standard_square):
-    """
-    Apply optional preprocessing steps to standardize dermoscopic images.
-    Parameters:
-    
-    ----------
-    img : np.ndarray
-        Input image (BGR).
-    clahe : bool, default=False
-        Apply illumination normalization (CLAHE).
-    remove_background : bool, default=False
-        Remove non-diagnostic skin background.
-    resizing_strategy : callable, default=format_standard_square
-        Function to resize image to standard size.
-
-    Returns:
-    -------
-    np.ndarray
-        Preprocessed image.
-    """
-
-    if img is None:
-        return None
-
-    if clahe:
-        img = fix_illumination(img)
-
-    if remove_background:
-        img = remove_background(img)
-
-    img = resizing_strategy(img)
-    img = img.astype('float32') / 255.0
-
+def format_center_crop_tf(img):
+    shape     = tf.shape(img)
+    h, w      = shape[0], shape[1]
+    crop_size = tf.minimum(h, w)
+    offset_h  = (h - crop_size) // 2
+    offset_w  = (w - crop_size) // 2
+    img = tf.image.crop_to_bounding_box(img, offset_h, offset_w, crop_size, crop_size)
+    img = tf.image.resize(img, [224, 224])
     return img

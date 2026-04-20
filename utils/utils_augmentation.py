@@ -415,3 +415,11 @@ def preprocess_imagenet(img):
         np.ndarray: Normalized image ready for a pretrained ImageNet model.
     """
     return (img / 255.0 - mean) / std
+
+# ── Visualization ─────────────────────────────────────────────────────────────────
+# Function to denormalize the images, only for visualization purposes
+def denormalize(tensor, mean, std):
+    # Reverse: x = (z * std) + mean
+    img = tensor.cpu().numpy().transpose((1, 2, 0))
+    img = img * np.array(std) + np.array(mean)
+    return np.clip(img, 0, 1)

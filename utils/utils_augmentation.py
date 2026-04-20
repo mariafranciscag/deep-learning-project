@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import json
 import time
 import tensorflow as tf
@@ -19,8 +20,8 @@ if not os.path.exists(aug_dir):
     os.makedirs(aug_dir)
 
 # ── RGB Weights (ImageNet) ─────────────────────────────────────────────────────────────────
-mean = [0.485, 0.456, 0.406]
-std  = [0.229, 0.224, 0.225]
+means = [0.485, 0.456, 0.406]
+stds  = [0.229, 0.224, 0.225]
 
 
 # ── Augmentation Strategies ─────────────────────────────────────────────────────────────────
@@ -32,7 +33,7 @@ strategy_1 = transforms.Compose([
     transforms.RandomVerticalFlip(),
     transforms.RandomRotation(90),
     transforms.ToTensor(),
-    transforms.Normalize(mean, std)
+    transforms.Normalize(means, stds)
 ])
 
 
@@ -44,7 +45,7 @@ strategy_2 = transforms.Compose([
     transforms.RandomRotation(90),
     transforms.ColorJitter(brightness=0.2, contrast=0.2),
     transforms.ToTensor(),
-    transforms.Normalize(mean, std),
+    transforms.Normalize(means, stds),
     transforms.RandomErasing(p=0.2, scale=(0.02, 0.05)),  # simulates hair/occlusion
 ])
 
@@ -61,14 +62,14 @@ strategy_3 = transforms.Compose([
     transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
     transforms.ElasticTransform(alpha=40.0, sigma=4.0),
     transforms.ToTensor(),
-    transforms.Normalize(mean, std),
+    transforms.Normalize(means, stds),
     transforms.RandomErasing(p=0.35, scale=(0.02, 0.08)),
 ])
 
 ### Base strategy, for the majority class
 strat_base = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize(mean, std),
+    transforms.Normalize(means, stds),
 ])
 
 
@@ -414,7 +415,7 @@ def preprocess_imagenet(img):
     Returns:
         np.ndarray: Normalized image ready for a pretrained ImageNet model.
     """
-    return (img / 255.0 - mean) / std
+    return (img / 255.0 - means) / stds
 
 # ── Visualization ─────────────────────────────────────────────────────────────────
 # Function to denormalize the images, only for visualization purposes

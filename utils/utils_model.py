@@ -43,7 +43,7 @@ def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch
         num_parallel_calls=2
     )
     if shuffle:
-        ds = ds.shuffle(buffer_size=min(1000, len(df)))
+        ds = ds.shuffle(buffer_size=len(df))
     if repeat:
         ds = ds.repeat()
     ds = ds.batch(batch_size).prefetch(1)

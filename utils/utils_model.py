@@ -85,7 +85,7 @@ def make_class_weights(df):
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 
-def get_callbacks(checkpoint_path, patience_es=8, patience_lr=4):
+def get_callbacks(checkpoint_path, patience_es=8, patience_lr=4, monitor="val_loss", mode="min"):
     """
     Returns the standard callback list used by all models.
 
@@ -95,40 +95,49 @@ def get_callbacks(checkpoint_path, patience_es=8, patience_lr=4):
         Path where the best weights will be saved, e.g.
         "checkpoints/model_a_best.weights.h5"
     patience_es : int
-        Number of epochs with no val_loss improvement before
-        EarlyStopping halts training and restores the best weights.
+        Number of epochs with no improvement before EarlyStopping 
+        halts training and restores the best weights.
     patience_lr : int
-        Number of epochs with no val_loss improvement before
-        ReduceLROnPlateau halves the learning rate.
+        Number of epochs with no improvement before ReduceLROnPlateau 
+        halves the learning rate.
+    monitor : str
+        Metric to be monitored (e.g., "val_loss", "val_accuracy").
+    mode : str
+        One of {"auto", "min", "max"}. In "min" mode, training will 
+        stop when the quantity monitored has stopped decreasing.
 
     Returns
     -------
     list[keras.callbacks.Callback]
     """
-    os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
 
+    os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
     return [
         keras.callbacks.ModelCheckpoint(
             filepath=checkpoint_path,
-            monitor="val_loss",
+            monitor=monitor,
+            mode=mode,
             save_best_only=True,
             save_weights_only=True,
             verbose=1,
         ),
         keras.callbacks.EarlyStopping(
-            monitor="val_loss",
+            monitor=monitor,
+            mode=mode,
             patience=patience_es,
             restore_best_weights=True,
             verbose=1,
         ),
         keras.callbacks.ReduceLROnPlateau(
-            monitor="val_loss",
+            monitor=monitor,
+            mode=mode,
             factor=0.5,
             patience=patience_lr,
             min_lr=1e-7,
             verbose=1,
         ),
     ]
+
 
 class BatchTimeCallback(tf.keras.callbacks.Callback):
     """
@@ -195,6 +204,33 @@ def plot_history(history, title):
 
     plt.tight_layout()
     plt.show()
+
+# ── Metrics ────────────────────────────────────────────────────────────────── #need change
+
+class BalancedAccuracy(tf.keras.metrics.Metric):
+    """Balanced accuracy = mean per-class recall. Works with sparse labels + logits."""
+    def __init__(self, num_classes, name='balanced_accuracy', **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.num_classes = num_classes
+        self.tp = self.add_weight(name='tp', shape=(num_classes,), initializer='zeros')
+        self.totals = self.add_weight(name='totals', shape=(num_classes,), initializer='zeros')
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        y_true = tf.cast(tf.squeeze(y_true), tf.int32)
+        y_pred = tf.cast(tf.argmax(y_pred, axis=-1), tf.int32)
+        correct = tf.cast(tf.equal(y_true, y_pred), tf.float32)
+        ones = tf.ones_like(y_true, dtype=tf.float32)
+        self.totals.assign_add(tf.math.unsorted_segment_sum(ones, y_true, self.num_classes))
+        self.tp.assign_add(tf.math.unsorted_segment_sum(correct, y_true, self.num_classes))
+
+    def result(self):
+        return tf.reduce_mean(tf.math.divide_no_nan(self.tp, self.totals))
+
+    def reset_state(self):
+        self.tp.assign(tf.zeros(self.num_classes))
+        self.totals.assign(tf.zeros(self.num_classes))
+
+
 
 
 # ── Evaluation ────────────────────────────────────────────────────────────────

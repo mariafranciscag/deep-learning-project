@@ -78,8 +78,8 @@ def make_dataset_new(df, shuffle=False, repeat=False, batch_size=32):
 
 # ── Class Weights ─────────────────────────────────────────────────────────────────
 def make_class_weights(df):
-    classes = np.array(sorted(df["dx"].unique()))
-    class_weights = compute_class_weight(class_weight="balanced",classes=classes,y=df["dx"])
+    classes = np.array(sorted(df["dx_encoded"].unique()))
+    class_weights = compute_class_weight(class_weight="balanced",classes=classes,y=df["dx_encoded"])
     return {i: w for i, w in enumerate(class_weights)}
 
 

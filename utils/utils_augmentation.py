@@ -133,7 +133,7 @@ def get_square_root_maps(df, target_size=4500):
         elif mult_map[label] <= 3:
             strat_map[label] = strategy_1 #mild stretch
             save_strat_map[label] = save_strategy_1
-        elif mult_map[label] <= 6:
+        elif mult_map[label] <= 5:
             strat_map[label] = strategy_2 #moderate stretch
             save_strat_map[label] = save_strategy_2
         else:

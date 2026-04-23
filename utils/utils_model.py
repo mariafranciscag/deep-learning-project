@@ -85,34 +85,36 @@ def make_class_weights(df):
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 
-def get_callbacks(checkpoint_path, patience_es=8, patience_lr=4, monitor="val_loss", mode="min"):
+def get_callbacks(checkpoint_path, model, patience_es=8, patience_lr=4, max_diff=0.15, monitor="val_loss", mode="min"):
     """
-    Returns the standard callback list used by all models.
-
+    Returns the standard callback list plus a custom gap-stop mechanism.
+    
     Parameters
     ----------
-    checkpoint_path : str
-        Path where the best weights will be saved, e.g.
-        "checkpoints/model_a_best.weights.h5"
-    patience_es : int
-        Number of epochs with no improvement before EarlyStopping 
-        halts training and restores the best weights.
-    patience_lr : int
-        Number of epochs with no improvement before ReduceLROnPlateau 
-        halves the learning rate.
-    monitor : str
-        Metric to be monitored (e.g., "val_loss", "val_accuracy").
-    mode : str
-        One of {"auto", "min", "max"}. In "min" mode, training will 
-        stop when the quantity monitored has stopped decreasing.
-
-    Returns
-    -------
-    list[keras.callbacks.Callback]
+    model : keras.Model
+        The model instance (needed to trigger the stop).
+    max_diff : float
+        The maximum allowed relative distance between val_loss and loss 
+        (e.g., 0.15 for 15%).
     """
-
     os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
-    return [
+    
+    # 1. Define the custom logic as a simple nested function (No Class!)
+    def check_overfitting_gap(epoch, logs):
+        train_loss = logs.get('loss')
+        val_loss = logs.get('val_loss')
+        
+        if train_loss and val_loss:
+            # Calculate the percentage difference
+            gap = (val_loss - train_loss) / train_loss
+            
+            if gap > max_diff:
+                print(f"\nEpoch {epoch+1}: Terminating training...")
+                print(f"Overfitting detected! Gap is {gap*100:.1f}%, which exceeds your {max_diff*100}% limit.")
+                model.stop_training = True
+
+    # 2. Build the list of standard callbacks
+    callbacks = [
         keras.callbacks.ModelCheckpoint(
             filepath=checkpoint_path,
             monitor=monitor,
@@ -136,7 +138,11 @@ def get_callbacks(checkpoint_path, patience_es=8, patience_lr=4, monitor="val_lo
             min_lr=1e-7,
             verbose=1,
         ),
+        # 3. Add the LambdaCallback to execute our gap check
+        keras.callbacks.LambdaCallback(on_epoch_end=check_overfitting_gap)
     ]
+    
+    return callbacks
 
 
 class BatchTimeCallback(tf.keras.callbacks.Callback):
@@ -172,6 +178,7 @@ class BatchTimeCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         """Compute and store the elapsed time for the completed epoch."""
         self.epoch_times.append(time.time() - self._epoch_start)
+
 
 
 # ── Plotting ──────────────────────────────────────────────────────────────────

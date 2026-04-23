@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(jupyter nbconvert *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c \"import json, sys; nb=json.load\\(sys.stdin\\); [print\\(cell['source']\\) for cell in nb['cells'] if cell.get\\('outputs'\\)]\")"
+    ]
+  }
+}

@@ -33,14 +33,12 @@ def load_image_with_resize(path, label, output_shape=(224, 224), preprocess_fn=N
         img = preprocess_fn(img)
     return img, label
 
-def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch_size=32):
+def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch_size=32, preprocess_fn=None):
     paths  = df["image_path"].values
     labels = df["dx_encoded"].values
 
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
-    ds = ds.map(
-        lambda x, y: load_image_with_resize(x, y, output_shape),
-        num_parallel_calls=2
+    ds = ds.map(lambda x, y: load_image_with_resize(x, y, output_shape, preprocess_fn=preprocess_fn)
     )
     if shuffle:
         ds = ds.shuffle(buffer_size=len(df))

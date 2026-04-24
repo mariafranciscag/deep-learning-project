@@ -172,18 +172,18 @@ def augment_single_image(original_path, transform, new_id):
 
 def build_metadata_row(new_id, save_path, label, lesion_id, original_row):
     """
-    Build metadata row for augmented image, preserving patient clinical data.
+    Build metadata row for augmented image, preserving all clinical data.
     """
-    # 1. Start with a full copy of the original clinical record
+    # 1. Create a full copy of the original clinical record (Age, Sex, Loc)
     new_row_dict = original_row.copy()
     
-    # 2. Update ONLY the image-specific identifiers
+    # 2. Update ONLY the image-specific identifiers for the new augmented version
     new_row_dict.update({
-        'image_id': new_id,
-        'image_path': save_path,
+        'image_id': new_id,      
+        'image_path': save_path, # Path to the new JPG
         'dx': label,
         'dataset': 'augmented',
-        'lesion_id': lesion_id # This links it to the specific augmented lesion
+        'lesion_id': lesion_id
     })
     
     return new_row_dict

@@ -28,7 +28,6 @@ stds  = [0.229, 0.224, 0.225]
 
 # Augmentation Strategies 
 
-## STRATEGY 1 — Light (geometric)
 ### safe flips and rotation, nothing that touches color or structure
 strategy_1 = transforms.Compose([
     transforms.RandomHorizontalFlip(),
@@ -177,10 +176,9 @@ def build_metadata_row(new_id, save_path, label, lesion_id, original_row):
     # 1. Create a full copy of the original clinical record (Age, Sex, Loc)
     new_row_dict = original_row.copy()
     
-    # 2. Update ONLY the image-specific identifiers for the new augmented version
     new_row_dict.update({
         'image_id': new_id,      
-        'image_path': save_path, # Path to the new JPG
+        'image_path': save_path, 
         'dx': label,
         'dataset': 'augmented',
         'lesion_id': lesion_id
@@ -206,13 +204,11 @@ def offline_augmentation(df, label, multiplier, save_strategy_map):
         original_row = metadata_rows[idx]
         
         new_id = f"AUG_{label}_{uuids[i*2]}"
-        # We pass the processed_path to the augmentation function
         save_path = augment_single_image(paths[idx], transform, new_id)
         
         # Build the new metadata row
         new_row = build_metadata_row(new_id, save_path, label, f"AUG_L_{uuids[i*2+1]}", original_row)
         
-        # Overwrite the 'processed_path' in the new row with the NEW augmented location
         new_row['processed_path'] = save_path 
         new_rows.append(new_row)
         
@@ -337,7 +333,6 @@ def preprocess_imagenet(img):
     return (img / 255.0 - means) / stds
 
 #Visualization
-#function to denormalize the images, only for visualization purposes
 def denormalize(tensor, mean, std):
     #reverse: x = (z * std) + mean
     img = tensor.cpu().numpy().transpose((1, 2, 0))

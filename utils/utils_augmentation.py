@@ -191,41 +191,31 @@ def build_metadata_row(new_id, save_path, label, lesion_id, original_row):
 
 def offline_augmentation(df, label, multiplier, save_strategy_map):
     new_rows = []
+    class_df = df[df['dx'] == label]
     
-    # 1. Filter for the class
-    class_df = df[df['dx'] == label].copy()
-    
-    # 2. SAFETY CHECK: Ensure we get a Series even if columns are duplicated
-    # We take the values of the FIRST 'image_path' column found
-    if 'image_path' in class_df.columns:
-        # .iloc[:, 0] handles the case where there might be 2 'image_path' columns
-        paths = class_df['image_path']
-        if isinstance(paths, pd.DataFrame):
-            paths = paths.iloc[:, 0]
-        paths = paths.tolist()
-    else:
-        raise KeyError(f"Column 'image_path' not found. Available: {class_df.columns.tolist()}")
-    
-    # 3. Convert all clinical data to dictionaries
+    # Use the specific unique name we just created
+    paths = class_df['processed_path'].tolist() 
     metadata_rows = class_df.to_dict('records')
     
-    # 4. Augmentation Logic
     n_to_generate = int(len(paths) * (multiplier - 1))
     transform = save_strategy_map.get(label)
     uuids = [uuid.uuid4().hex[:8] for _ in range(n_to_generate * 2)]
     
     for i in range(n_to_generate):
         idx = i % len(paths)
-        original_path = paths[idx]
         original_row = metadata_rows[idx]
         
         new_id = f"AUG_{label}_{uuids[i*2]}"
-        save_path = augment_single_image(original_path, transform, new_id)
+        # We pass the processed_path to the augmentation function
+        save_path = augment_single_image(paths[idx], transform, new_id)
         
-        lesion_id = f"AUG_LESION_{label}_{uuids[i*2+1]}"
-        new_row = build_metadata_row(new_id, save_path, label, lesion_id, original_row)
+        # Build the new metadata row
+        new_row = build_metadata_row(new_id, save_path, label, f"AUG_L_{uuids[i*2+1]}", original_row)
+        
+        # Overwrite the 'processed_path' in the new row with the NEW augmented location
+        new_row['processed_path'] = save_path 
         new_rows.append(new_row)
-    
+        
     return new_rows
 
 

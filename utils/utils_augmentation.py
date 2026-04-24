@@ -190,42 +190,39 @@ def build_metadata_row(new_id, save_path, label, lesion_id, original_row):
 
 
 def offline_augmentation(df, label, multiplier, save_strategy_map):
-    """
-    Generate augmented images for a specific class label.
-    """
     new_rows = []
     
-    # 1. Get only the rows for this specific class (e.g., 'mel')
-    class_df = df[df['dx'] == label]
+    # 1. Filter for the class
+    class_df = df[df['dx'] == label].copy()
     
-    # 2. THE FIX: Extract only the paths column as a list
-    paths = class_df['image_path'].tolist() 
+    # 2. SAFETY CHECK: Ensure we get a Series even if columns are duplicated
+    # We take the values of the FIRST 'image_path' column found
+    if 'image_path' in class_df.columns:
+        # .iloc[:, 0] handles the case where there might be 2 'image_path' columns
+        paths = class_df['image_path']
+        if isinstance(paths, pd.DataFrame):
+            paths = paths.iloc[:, 0]
+        paths = paths.tolist()
+    else:
+        raise KeyError(f"Column 'image_path' not found. Available: {class_df.columns.tolist()}")
     
-    # 3. Convert all columns (age, sex, dx, etc.) into a list of dictionaries
-    # This ensures 'age' and 'sex' are carried over for every image
+    # 3. Convert all clinical data to dictionaries
     metadata_rows = class_df.to_dict('records')
     
-    # 4. Calculate how many new images we need
+    # 4. Augmentation Logic
     n_to_generate = int(len(paths) * (multiplier - 1))
     transform = save_strategy_map.get(label)
-    
-    # 5. Pre-generate IDs
     uuids = [uuid.uuid4().hex[:8] for _ in range(n_to_generate * 2)]
     
-    # 6. The Loop: Create the images and their metadata
     for i in range(n_to_generate):
         idx = i % len(paths)
         original_path = paths[idx]
-        original_row = metadata_rows[idx] # This dict contains the original age/sex
+        original_row = metadata_rows[idx]
         
-        # New unique IDs
         new_id = f"AUG_{label}_{uuids[i*2]}"
-        lesion_id = f"AUG_LESION_{label}_{uuids[i*2+1]}"
-        
-        # Save the physical image
         save_path = augment_single_image(original_path, transform, new_id)
         
-        # Build the new row (linking the new image to the old age/sex)
+        lesion_id = f"AUG_LESION_{label}_{uuids[i*2+1]}"
         new_row = build_metadata_row(new_id, save_path, label, lesion_id, original_row)
         new_rows.append(new_row)
     

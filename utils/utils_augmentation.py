@@ -308,35 +308,36 @@ def combine_datasets(original_df, augmented_df, undersampled_df):
 
 def run_augmentation_pipeline(train_df, undersample, undersample_size, output_path, augmentation_map, save_strategy_map, undersample_label='nv'):
     print("=" * 70)
-    print("AUGMENTATION PIPELINE (WITH CLINICAL DATA PRESERVATION)")
+    print("AUGMENTATION PIPELINE (FIXED)")
     print("=" * 70)
     
-    # [1/3] Generate augmented images
-    print("\n[1/3] Generating augmented images...")
+    # Generate augmented images
+    # Every row in augmented_df will ALREADY have age, sex, etc.
     augmented_df = generate_augmented_dataset(train_df, augmentation_map, save_strategy_map)
+    print(f"Generated {len(augmented_df)} augmented images")
     
-    # [2/3] Undersample specified class
+    # Balance the dataset
     if undersample:
-        print(f"\n[2/3] Undersampling '{undersample_label}'...")
+        print(f"Undersampling '{undersample_label}'...")
         undersampled_df = random_undersample_class(train_df, undersample_label, undersample_size)
         non_undersampled = train_df[train_df['dx'] != undersample_label]
         aug_train_df = pd.concat([non_undersampled, undersampled_df, augmented_df], ignore_index=True)
     else:
         aug_train_df = pd.concat([train_df, augmented_df], ignore_index=True)
 
-    # [3/3] Save and report
-    # We no longer need the complex merge logic because build_metadata_row 
-    # now preserves the clinical data automatically!
-    
+    # Save simple and clean
     if output_path:
-        # Add the dx_encoded before saving
+        # Final safety check for labels
         aug_train_df["dx_encoded"] = aug_train_df["dx"].map(label2idx).astype(int)
+        
+        # Save the file - it now contains both ISIC_ and AUG_ rows with full metadata
         aug_train_df.to_csv(output_path, index=False)
-        print(f"\nSaved FIXED metadata to: {output_path}")
+        print(f"\nSUCCESS: Saved {len(aug_train_df)} total rows to: {output_path}")
 
-    print("\n" + "=" * 70)
-    print("FINAL CLASS DISTRIBUTION")
-    print(aug_train_df["dx"].value_counts().sort_index())
+    # VERIFICATION: Show us the augmented rows!
+    print("\nSample of Augmented Rows (The bottom of the file):")
+    print(aug_train_df.tail(5)[['image_id', 'dx', 'age', 'sex']])
+    
     return aug_train_df
 
 def preprocess_imagenet(img):

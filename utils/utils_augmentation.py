@@ -355,12 +355,33 @@ def run_augmentation_pipeline(train_df, undersample, undersample_size, output_pa
         print("\n[3/3] Combining datasets...")
         aug_train_df =  pd.concat([train_df, augmented_df], ignore_index=True)
         print(f"Final dataset size: {len(aug_train_df)} samples")
-
         
     #save and report
     if output_path:
-        aug_train_df.to_csv(output_path, index=False)
+
+        # Get the raw metadata that contains clinical info
+        raw_meta = pd.read_csv('data/HAM10000_metadata')
+
+        # Extract unique clinical data for each lesion
+        clinical_info = raw_meta[['lesion_id', 'age', 'sex', 'localization']].drop_duplicates('lesion_id')
+
+        # Create a helper column to map augmented lesions back to their parents
+        aug_train_df['parent_lesion_id'] = aug_train_df['lesion_id'].str.replace('AUG_LESION_', '', regex=False)
+
+        # Merge clinical info back into the augmented dataframe
+        aug_train_df = aug_train_df.merge(
+            clinical_info, 
+            left_on='parent_lesion_id', 
+            right_on='lesion_id', 
+            how='left', 
+            suffixes=('', '_raw')
+        )
+
+        # Clean up and save the final CSV
+        aug_train_df = aug_train_df.drop(columns=['parent_lesion_id', 'lesion_id_raw'])
+        aug_train_df.to_csv('data/augmented_metadata.csv', index=False)
         print(f"\nSaved to: {output_path}")
+
     
     print("\n" + "=" * 70)
     print("FINAL CLASS DISTRIBUTION")

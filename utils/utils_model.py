@@ -85,7 +85,7 @@ def make_class_weights(df):
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 
-def get_callbacks(checkpoint_path, model, patience_es=8, patience_lr=4, max_diff=0.15, monitor="val_loss", mode="min"):
+def get_callbacks(checkpoint_path, model, patience_es=8, patience_lr=4, max_diff=0.15, monitor="val_balanced_accuracy", mode="max"):
     """
     Returns the standard callback list plus a custom gap-stop mechanism.
     
@@ -101,8 +101,8 @@ def get_callbacks(checkpoint_path, model, patience_es=8, patience_lr=4, max_diff
     
     # 1. Define the custom logic as a simple nested function (No Class!)
     def check_overfitting_gap(epoch, logs):
-        train_loss = logs.get('loss')
-        val_loss = logs.get('val_loss')
+        train_loss = logs.get('balanced_accuracy')
+        val_loss = logs.get('val_balanced_accuracy')
         
         if train_loss and val_loss:
             # Calculate the percentage difference

@@ -38,7 +38,9 @@ def make_dataset(df, output_shape=(224, 224), shuffle=False, repeat=False, batch
     labels = df["dx_encoded"].values
 
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
-    ds = ds.map(lambda x, y: load_image_with_resize(x, y, output_shape, preprocess_fn=preprocess_fn)
+    ds = ds.map(
+        lambda x, y: load_image_with_resize(x, y, output_shape, preprocess_fn=preprocess_fn),
+        num_parallel_calls=tf.data.AUTOTUNE
     )
     if shuffle:
         ds = ds.shuffle(buffer_size=len(df))

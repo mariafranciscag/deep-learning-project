@@ -172,29 +172,19 @@ def augment_single_image(original_path, transform, new_id):
 
 def build_metadata_row(new_id, save_path, label, lesion_id, original_row):
     """
-    Build metadata row for augmented image.
-    
-    Args:
-        new_id: New image ID
-        save_path: Path to saved image
-        label: Class label
-        lesion_id: New lesion ID
-        original_row: Original image metadata
-    
-    Returns:
-        Dictionary with augmented image metadata
+    Build metadata row for augmented image, preserving patient clinical data.
     """
-    new_row_dict = {
+    # 1. Start with a full copy of the original clinical record
+    new_row_dict = original_row.copy()
+    
+    # 2. Update ONLY the image-specific identifiers
+    new_row_dict.update({
         'image_id': new_id,
         'image_path': save_path,
         'dx': label,
         'dataset': 'augmented',
-        'lesion_id': lesion_id
-    }
-    
-    for col in ['dx_type', 'age', 'sex', 'localization']:
-        if col in original_row:
-            new_row_dict[col] = original_row[col]
+        'lesion_id': lesion_id # This links it to the specific augmented lesion
+    })
     
     return new_row_dict
 
@@ -317,80 +307,36 @@ def combine_datasets(original_df, augmented_df, undersampled_df):
 
 
 def run_augmentation_pipeline(train_df, undersample, undersample_size, output_path, augmentation_map, save_strategy_map, undersample_label='nv'):
-    """
-    Complete augmentation and balancing pipeline.
-    
-    Args:
-        train_df: Original training dataframe
-        augmentation_map: {label: multiplier} for augmentation
-        undersample: Boolean to undersample
-        undersample_label: Class to undersample (e.g., 'nv')
-        undersample_size: Target size for undersampling
-        output_path: Path to save augmented_metadata.csv
-    
-    Returns:
-        Combined and balanced dataframe
-    """
     print("=" * 70)
-    print("AUGMENTATION PIPELINE")
+    print("AUGMENTATION PIPELINE (WITH CLINICAL DATA PRESERVATION)")
     print("=" * 70)
     
-    #augmented images
+    # [1/3] Generate augmented images
     print("\n[1/3] Generating augmented images...")
     augmented_df = generate_augmented_dataset(train_df, augmentation_map, save_strategy_map)
-    print(f"Generated {len(augmented_df)} augmented images")
     
-    
-    #undersample specified class
+    # [2/3] Undersample specified class
     if undersample:
-        print(f"\n[2/3] Undersampling '{undersample_label}' to {undersample_size} samples...")
+        print(f"\n[2/3] Undersampling '{undersample_label}'...")
         undersampled_df = random_undersample_class(train_df, undersample_label, undersample_size)
-        print(f"Undersampled to {len(undersampled_df)} samples")
-        
-        print("\n[3/3] Combining datasets...")
-        aug_train_df = combine_datasets(train_df, augmented_df, undersampled_df)
-        print(f"Final dataset size: {len(aug_train_df)} samples")
-
+        non_undersampled = train_df[train_df['dx'] != undersample_label]
+        aug_train_df = pd.concat([non_undersampled, undersampled_df, augmented_df], ignore_index=True)
     else:
-        print("\n[3/3] Combining datasets...")
-        aug_train_df =  pd.concat([train_df, augmented_df], ignore_index=True)
-        print(f"Final dataset size: {len(aug_train_df)} samples")
-        
-    #save and report
-    if output_path:
+        aug_train_df = pd.concat([train_df, augmented_df], ignore_index=True)
 
-        # Get the raw metadata that contains clinical info
-        raw_meta = pd.read_csv('data/HAM10000_metadata')
-
-        # Extract unique clinical data for each lesion
-        clinical_info = raw_meta[['lesion_id', 'age', 'sex', 'localization']].drop_duplicates('lesion_id')
-
-        # Create a helper column to map augmented lesions back to their parents
-        aug_train_df['parent_lesion_id'] = aug_train_df['lesion_id'].str.replace('AUG_LESION_', '', regex=False)
-
-        # Merge clinical info back into the augmented dataframe
-        aug_train_df = aug_train_df.merge(
-            clinical_info, 
-            left_on='parent_lesion_id', 
-            right_on='lesion_id', 
-            how='left', 
-            suffixes=('', '_raw')
-        )
-
-        # Clean up and save the final CSV
-        aug_train_df = aug_train_df.drop(columns=['parent_lesion_id', 'lesion_id_raw'])
-        aug_train_df.to_csv('data/augmented_metadata.csv', index=False)
-        print(f"\nSaved to: {output_path}")
-
+    # [3/3] Save and report
+    # We no longer need the complex merge logic because build_metadata_row 
+    # now preserves the clinical data automatically!
     
+    if output_path:
+        # Add the dx_encoded before saving
+        aug_train_df["dx_encoded"] = aug_train_df["dx"].map(label2idx).astype(int)
+        aug_train_df.to_csv(output_path, index=False)
+        print(f"\nSaved FIXED metadata to: {output_path}")
+
     print("\n" + "=" * 70)
     print("FINAL CLASS DISTRIBUTION")
-    print("=" * 70)
     print(aug_train_df["dx"].value_counts().sort_index())
-    print("=" * 70)
-
-    aug_train_df["dx_encoded"] = aug_train_df["dx"].map(label2idx).astype(int)
-    
     return aug_train_df
 
 def preprocess_imagenet(img):
